@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+# Copyright IDEX Biometrics
+# Licensed under the MIT License, see LICENSE
+# SPDX-License-Identifier: MIT
+
+import argparse
+from pathlib import Path
+
+DESCRIPTION = """
+This script generates a .gdbinit script that sets up GDB's Python interpreter.
+"""
+
+TEMPLATE = """
+# GDB uses an internal Python interpreter which means user installed packages in a
+# virtual environment are ignored.  This setup script adds the user's sys.path to
+# GDB's such that we can find installed packages.  Additionally, those paths are
+# searched for any files named custom_gdb_extensions.py which will be sourced. 
+# These scripts can include custom CLI commands etc.
+python
+import subprocess, sys, gdb
+from pathlib import Path
+# Execute Python using the user's shell and pull out the sys.path (for site-packages)
+paths = subprocess.check_output('python -c "import os,sys;print(os.linesep.join(sys.path).strip())"',shell=True).decode("utf-8").split()
+# Extend GDB's Python search path
+sys.path.extend(paths)
+# Source any gdb_init.py scripts in any packages
+for path in sys.path:
+    if 'site-packages' in path:
+        for init_file in Path(path).glob("**/custom_gdb_extensions.py"):
+            gdb.execute(f"source {init_file}")
+end
+"""
+
+def get_args():
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        formatter_class=lambda prog: argparse.RawTextHelpFormatter(prog, max_help_position=80)
+    )
+    parser.add_argument(
+        "-f",
+        "--filename",
+        default=".gdbinit",
+        help="define the name of the init script (default: %(default)s)"
+    )
+    g = parser.add_mutually_exclusive_group()
+    g.add_argument(
+        "-o",
+        "--overwrite",
+        action="store_true",
+        help="overwrite any current .gdbinit script"
+    )
+    g.add_argument(
+        "-a",
+        "--append",
+        action="store_true",
+        help="append to a current .gdbinit script"
+    )
+    return parser.parse_args()
+
+def main():
+    args = get_args()
+    gdbinit = Path(args.filename)
+
+    if gdbinit.exists() and not (args.overwrite or args.append):
+        raise RuntimeError(".gdbinit already exists; use --overwrite or --append options")
+
+    mode = 'a' if args.append else 'w'
+    with gdbinit.open(mode) as f:
+        f.write(TEMPLATE)
+    
+if __name__ == "__main__":
+    main()

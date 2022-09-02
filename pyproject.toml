@@ -1,0 +1,21 @@
+[project]
+name = "verilator_mem_if"
+description = "Useful backdoor memory access tools for Verilator simulations."
+dynamic = ["version"]
+
+[build-system]
+requires = [
+    "setuptools>=61.0", 
+    "wheel",
+    "setuptools_scm[toml]>=6.0",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = {attr = "verilator_mem_if.__version__"}
+
+[tool.setuptools_scm]
+write_to = "src/verilator_mem_if/_version.py"
+
+[project.scripts]
+backdoor = "verilator_mem_if.backdoor:main"
