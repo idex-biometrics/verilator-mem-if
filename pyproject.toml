@@ -1,7 +1,33 @@
 [project]
 name = "verilator_mem_if"
 description = "Useful backdoor memory access tools for Verilator simulations."
+authors = [
+    { name = "Shareef Jalloq" },
+    { email = "shareef.jalloq@idexbiometrics.com" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.6"
+keywords = [
+    "verilator",
+    "simulation",
+    "opentitan",
+    "backdoor",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "veriloghex",
+    "intelhex",
+    "bincopy",
+    "gdbundle_verilator_mem_if"
+]
 dynamic = ["version"]
+
+[project.urls]
+homepage = "https://github.com/idex-biometrics/verilator-mem-if"
 
 [build-system]
 requires = [
@@ -18,4 +44,4 @@ version = {attr = "verilator_mem_if.__version__"}
 write_to = "src/verilator_mem_if/_version.py"
 
 [project.scripts]
-backdoor = "verilator_mem_if.backdoor:main"
+bd = "verilator_mem_if.backdoor:main"

@@ -5,9 +5,9 @@
 import sys, argparse, intelhex
 from pathlib import Path
 from intelhex import IntelHex
+from veriloghex import VerilogHex
 
 from .backdoor_memory_interface import BackdoorMemoryInterface
-from .veriloghex import VerilogHex
 from . import __version__
 
 def dumpmem(hostname: str, port: int, address: int, size: int, ):

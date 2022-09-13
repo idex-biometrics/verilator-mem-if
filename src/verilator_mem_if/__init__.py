@@ -8,4 +8,3 @@ except ImportError:
     __version__ = "unknown"
 
 from .backdoor_memory_interface import BackdoorMemoryInterface
-from .veriloghex import VerilogHex
