@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 import gdb
+import argparse
 import sys
 from pathlib import Path
 from contextlib import contextmanager
@@ -22,9 +23,16 @@ def file_or_stdout(file):
         with Path(file).open('w') as f:
             yield f
 
+def validate_address(astring):
+    try:
+        return int(astring,0)
+    except ValueError:
+        raise argparse.ArgumentError("expecting a hex string or integer for the address")
+
+
 @_gdb.register("dump")
 class BackdoorDump(_gdb.UserCommand):
-    """Write contents of memory to a hex file. 
+    """Write contents of memory to a hex file.
 
     """
     extensions = {
@@ -37,12 +45,12 @@ class BackdoorDump(_gdb.UserCommand):
     def setup(self, parser):
         parser.add_argument(
             "address",
-            type=int,
+            type=validate_address,
             help="specify the starting address"
         )
         parser.add_argument(
             "size",
-            type=int,
+            type=validate_address,
             help="specify the number of bytes to dump"
         )
         parser.add_argument(
@@ -66,7 +74,7 @@ class BackdoorDump(_gdb.UserCommand):
         hostname,port = gdb.parameter('bd-uid').split(':')
         with BackdoorMemoryInterface(hostname, port) as bd:
             data = bd.read_memory_block8(args.address, args.size)
-        
+
         try:
             filename = args.output + "." + self.extensions[args.format]
         except KeyError:
@@ -86,12 +94,12 @@ class BackdoorDump(_gdb.UserCommand):
                     ihex.dump(f)
                 else:
                     ihex.tofile(f, 'hex')
-                
+
 
 
 @_gdb.register("load")
 class BackdoorLoad(_gdb.UserCommand):
-    """Write contents of a hex file to memory. 
+    """Write contents of a hex file to memory.
 
     Currently supportd the Verilog and Intel hex file formats.
 
