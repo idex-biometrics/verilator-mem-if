@@ -119,7 +119,9 @@ class BackdoorMemoryInterface:
         self._sock.sendall(struct.pack('I H B', *header))
 
     def _send_payload(self, bytes: bytearray):
+        LOG.info(f"sending {len(bytes)} bytes")
         self._sock.sendall(bytes)
+        LOG.info("waiting for ack")
         self._recv_ack()
 
     def _recv_payload(self, size: int) -> Sequence[int]:

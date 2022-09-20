@@ -17,6 +17,8 @@ from . import __version__
 LOG = logging.getLogger()
 logging.basicConfig(format="%(levelname)s:%(name)s: %(message)s")
 
+class IllegalFormatError(Exception):
+    pass
 
 @contextmanager
 def file_or_stdout(file):
@@ -27,7 +29,8 @@ def file_or_stdout(file):
             yield f
             
 
-def validate_address(astring):
+def int_from_dec_or_hex_string(astring):
+    """Converts string decimal or hex arguments to int. """
     try:
         return int(astring,0)
     except ValueError:
@@ -42,14 +45,14 @@ def get_format(hexfile):
             '.ihex': 'intel'
         }[hexfile.suffix]
     except KeyError:
-        raise ValueError(f"could not decode hexfile format from file '{hexfile.name}'")
+        raise IllegalFormatError(
+            f"suffix '{hexfile.suffix}' of file '{hexfile.name}' does not match a supported file format: [.vmem, .hex, .ihex]"
+        )
 
 
 def load(args):
     """Load memory from file. """
 
-    LOG.debug(f"load: args={args}")
-    
     hexfile = Path(args.filename)
     format = args.format or get_format(hexfile)
 
@@ -62,8 +65,6 @@ def load(args):
 def dump(args):
     """Dump memory contents to STDOUT or file. """
 
-    LOG.debug(f"dump: args={args}")
-    
     with BackdoorMemoryInterface(args.hostname, args.port) as bd:
         data = bd.read_memory_block8(args.address, args.size)
     
@@ -81,6 +82,24 @@ def dump(args):
                 ihex.tofile(f, 'hex')
         else:
             raise ValueError(f"invalid format '{args.format}'")
+
+def init(args):
+    """Initialize a RAM with a specific byte value. """
+
+    with BackdoorMemoryInterface(args.hostname, args.port) as bd:
+        # The BackdoorMemoryInterface has a maximum payload size of 32KB so
+        # we split anything larger into chunks.
+        chunk_size = 2**15
+        chunks = args.size // chunk_size
+        if args.size % chunk_size:
+            raise ValueError("sizes that are not multiples of 32KB unsupported")
+        address = args.address
+        for _ in range(chunks):
+            bd.write_memory_block8(
+                address,
+                bytearray([args.init_value] * chunk_size)
+            )
+            address += chunk_size
 
 
 formatter = lambda prog: argparse.RawTextHelpFormatter(prog, max_help_position=80, width=200)
@@ -118,6 +137,32 @@ def parse_args():
     )
 
 
+    # init subparser
+    parser_init = subparsers.add_parser(
+        "init",
+        help="initialize a memory with a fixed byte value"
+    )
+    parser_init.add_argument(
+        "--init-value",
+        type=int_from_dec_or_hex_string,
+        default="0xff",
+        help="byte value to use for flash initialization (default: %(default)s)"
+    )
+    parser_init.add_argument(
+        "--address",
+        default=0x800000,
+        type=int_from_dec_or_hex_string,
+        help="specify the start address of the memory region (default: %(default)s)"
+    )
+    parser_init.add_argument(
+        "--size",
+        default=0x80000,
+        type=int_from_dec_or_hex_string,
+        help="specify the size of the memory in bytes (default: %(default)s)"
+    )
+    parser_init.set_defaults(func=init)
+
+
     # load subparser
     parser_load = subparsers.add_parser(
         "load",
@@ -143,20 +188,20 @@ def parse_args():
     )
     parser_dump.add_argument(
         "address",
-        type=validate_address,
-        help="the memory address to dump"
+        type=int_from_dec_or_hex_string,
+        help="memory address to dump"
     )
     parser_dump.add_argument(
         "size",
         type=int,
-        help="number of bytes to transfer"
+        help="number of bytes to dump"
     )
     parser_dump.add_argument(
         "-f",
         "--format",
         default="hex",
         choices=["hex", "intel", "verilog"],
-        help="specify the output format (default: %(default)s)"
+        help="the dump format to use (default: %(default)s)"
     )
     parser_dump.add_argument(
         "--vmem-width",
