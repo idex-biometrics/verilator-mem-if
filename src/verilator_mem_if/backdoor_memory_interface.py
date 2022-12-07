@@ -44,6 +44,7 @@ class BackdoorMemoryInterface:
         self._hostname = hostname
         self._port = int(port)
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         
     def __enter__(self):
         self.connect()
