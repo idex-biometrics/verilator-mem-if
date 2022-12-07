@@ -5,6 +5,7 @@
 import logging
 import socket
 import struct
+import threading
 from time import sleep
 from typing import (Callable, Sequence, Union)
 from ._version import version as plugin_version
@@ -13,8 +14,8 @@ from .conversion import *
 LOG = logging.getLogger(__name__)
 
 class BackdoorMemoryInterface:
-    """@brief A backdoor memory interface for use with a simulation model. 
-    
+    """@brief A backdoor memory interface for use with a simulation model.
+
     Each read/write request has two phases, a header and a payload.  The header defines
     the transaction and should match the C struct as defined by:
 
@@ -33,7 +34,7 @@ class BackdoorMemoryInterface:
     A write access comprises the header, the data payload and an acknowledge byte.
 
     A read access comprises the header and a data payload only.
-    
+
     """
 
     WRITE = 0x0
@@ -45,7 +46,8 @@ class BackdoorMemoryInterface:
         self._port = int(port)
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        
+        self._lock = threading.Lock()
+
     def __enter__(self):
         self.connect()
         return self
@@ -63,6 +65,8 @@ class BackdoorMemoryInterface:
 
     def close(self):
         self._sock.close()
+        if self._lock.locked():
+            self._lock.release()
 
     def write_memory(self, addr: int, data: int, transfer_size: int = 32, **kwargs) -> None:
         """@brief Write a single memory location. """
@@ -106,11 +110,28 @@ class BackdoorMemoryInterface:
         """@brief Read a block of bytes. """
         return self._read_mem8(addr, size)
 
+    # Private methods
+
+    def _threadlocked(func:Callable):
+        """
+        Decorator that prevents multiple callers trying to access memory via the
+        same object at the same time.
+        WARNING - a function decorated with @_threadlocked can't call another.
+        """
+        def _locked(self, *args, **kwargs):
+            self._lock.acquire()
+            ret = func(self, *args, **kwargs)
+            self._lock.release()
+            return ret
+        return _locked
+
+    @_threadlocked
     def _write_mem8(self, addr: int, data: Sequence[int]):
         assert isinstance(data, Sequence), "`data` must be byte Sequence"
         self._send_header(addr, len(data), self.WRITE)
         self._send_payload(bytearray(data))
 
+    @_threadlocked
     def _read_mem8(self, addr: int, size: int) -> Sequence[int]:
         self._send_header(addr, size, self.READ)
         return self._recv_payload(size)
@@ -120,9 +141,9 @@ class BackdoorMemoryInterface:
         self._sock.sendall(struct.pack('I H B', *header))
 
     def _send_payload(self, bytes: bytearray):
-        LOG.info(f"sending {len(bytes)} bytes")
+        LOG.debug(f"sending {len(bytes)} bytes")
         self._sock.sendall(bytes)
-        LOG.info("waiting for ack")
+        LOG.debug("waiting for ack")
         self._recv_ack()
 
     def _recv_payload(self, size: int) -> Sequence[int]:
